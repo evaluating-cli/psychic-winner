@@ -29,6 +29,16 @@ def test_haversine_symmetry():
     assert a == pytest.approx(b)
 
 
+def test_haversine_antipodal_no_domain_error():
+    # Near-antipodal points can push the haversine 'a' term 1 ulp above 1.0,
+    # which used to crash math.asin with ValueError (regression test).
+    lat1, lon1 = -58.83543353249384, 20.930552591388874
+    lat2, lon2 = 58.835433532781714, 200.9305525921169
+    d = geo.haversine_km(lat1, lon1, lat2, lon2)
+    # Half the great-circle circumference with R = 6371.0088 km.
+    assert d == pytest.approx(20015.1, abs=5.0)
+
+
 def test_lonlat_to_tile_zoom_0():
     assert geo.lonlat_to_tile(0.0, 0.0, 0) == (0, 0)
     assert geo.lonlat_to_tile(179.9, 85.0, 0) == (0, 0)
@@ -86,7 +96,7 @@ def test_geocode_accepts_coordinates():
     assert label == "48.8566,2.3522"
 
 
-def test_geocode_rejects_out_of_range_coordinates(monkeypatch):
+def test_geocode_invalid_latitude_falls_back_to_name_lookup(monkeypatch):
     class Boom:
         def get(self, *args, **kwargs):
             raise AssertionError("network should not be used for parsing")

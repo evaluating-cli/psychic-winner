@@ -17,20 +17,45 @@ from .plotting import plot_route
 from .tiles import CACHE_DIR, download_tiles
 
 
+def grid_size(value: str) -> int:
+    n = int(value)
+    if n < 2:
+        raise argparse.ArgumentTypeError("must be at least 2")
+    return n
+
+
+def non_negative_float(value: str) -> float:
+    v = float(value)
+    if v < 0:
+        raise argparse.ArgumentTypeError("must be >= 0")
+    return v
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Route between two European cities favouring low elevation change."
+        prog="elevation-route",
+        description="Route between two European cities favouring low elevation change.",
     )
     parser.add_argument("city1", help="First city, e.g. 'Paris, France'")
     parser.add_argument("city2", help="Second city, e.g. 'Berlin, Germany'")
-    parser.add_argument("--grid-size", type=int, default=700, help="DEM grid resolution")
+    parser.add_argument(
+        "--grid-size",
+        type=grid_size,
+        default=700,
+        help="DEM grid resolution (min 2). Default: 700",
+    )
     parser.add_argument(
         "--elev-weight",
-        type=float,
+        type=non_negative_float,
         default=100.0,
         help="How much 1 metre of elevation change costs relative to 1 metre of distance. Default: 100",
     )
-    parser.add_argument("--buffer-km", type=float, default=None, help="Extra bounding-box margin")
+    parser.add_argument(
+        "--buffer-km",
+        type=non_negative_float,
+        default=None,
+        help="Extra bounding-box margin in km (0 = no margin). Default: auto",
+    )
     parser.add_argument("--zoom", type=int, default=None, help="Force terrain-tile zoom")
     parser.add_argument("--output", default="route_topomap.png", help="Output PNG path")
     parser.add_argument("--show", action="store_true", help="Show plot interactively")
@@ -52,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
 
     straight_km = haversine_km(lat1, lon1, lat2, lon2)
 
-    if args.buffer_km:
+    if args.buffer_km is not None:
         buffer_deg = args.buffer_km / 111.0
     else:
         buffer_deg = max(0.3, straight_km * 0.15 / 111.0)

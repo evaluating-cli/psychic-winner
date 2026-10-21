@@ -11,9 +11,8 @@ from elevation_route import tiles
 
 
 @pytest.fixture(autouse=True)
-def tmp_cache(tmp_path, monkeypatch):
-    monkeypatch.setattr(tiles, "CACHE_DIR", tmp_path / "cache")
-    return tiles.CACHE_DIR
+def tmp_cache(isolated_cache):
+    return isolated_cache
 
 
 def write_png(path, rgb_pixels):
@@ -55,10 +54,25 @@ def test_load_tile_corrupt_file_returns_none(tmp_cache):
     assert tiles.load_tile(1, 2, 3) is None
 
 
+def test_download_tile_refetches_corrupt_cache_entry(tmp_cache, monkeypatch):
+    # A >100-byte non-PNG body (e.g. an S3 error page) must not be trusted.
+    path = tiles.tile_cache_path(4, 5, 6)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"<Error>AccessDenied</Error>" + b"x" * 120)
+
+    class FakeSession:
+        def get(self, url, timeout=None):
+            return FakeResponse(tiles.PNG_MAGIC + b"v" * 200)
+
+    monkeypatch.setattr(tiles, "SESSION", FakeSession())
+    assert tiles.download_tile(4, 5, 6) is True
+    assert tiles._looks_like_png(path.read_bytes()[:8])
+
+
 def test_download_tile_uses_cache_without_network(tmp_cache, monkeypatch):
     path = tiles.tile_cache_path(4, 5, 6)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(b"\x89PNG" + b"x" * 200)
+    path.write_bytes(tiles.PNG_MAGIC + b"x" * 200)
 
     class Boom:
         def get(self, *args, **kwargs):
@@ -80,7 +94,7 @@ def test_download_tile_writes_cache(tmp_cache, monkeypatch):
     class FakeSession:
         def get(self, url, timeout=None):
             calls.append(url)
-            return FakeResponse(b"\x89PNG" + b"e" * 200)
+            return FakeResponse(tiles.PNG_MAGIC + b"e" * 200)
 
     monkeypatch.setattr(tiles, "SESSION", FakeSession())
     assert tiles.download_tile(8, 9, 10) is True
@@ -100,7 +114,7 @@ def test_download_tile_falls_back_to_second_mirror(tmp_cache, monkeypatch):
             calls.append(url)
             if len(calls) == 1:
                 raise requests.RequestException("boom")
-            return FakeResponse(b"\x89PNG" + b"e" * 200)
+            return FakeResponse(tiles.PNG_MAGIC + b"e" * 200)
 
     monkeypatch.setattr(tiles, "SESSION", FakeSession())
     assert tiles.download_tile(8, 9, 10) is True
@@ -119,6 +133,17 @@ def test_download_tile_failure_warns(tmp_cache, monkeypatch, capsys):
     err = capsys.readouterr().err
     assert "Warning: could not download tile 8/9/10" in err
     assert not tiles.tile_cache_path(8, 9, 10).exists()
+
+
+def test_download_tile_rejects_non_png_body(tmp_cache, monkeypatch, capsys):
+    class FakeSession:
+        def get(self, url, timeout=None):
+            return FakeResponse(b"<Error>AccessDenied</Error>" + b"x" * 120)
+
+    monkeypatch.setattr(tiles, "SESSION", FakeSession())
+    assert tiles.download_tile(8, 9, 10) is False
+    assert not tiles.tile_cache_path(8, 9, 10).exists()
+    assert "could not download tile" in capsys.readouterr().err
 
 
 def test_download_tiles_downloads_all(tmp_cache, monkeypatch):

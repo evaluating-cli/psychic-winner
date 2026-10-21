@@ -16,7 +16,7 @@ def offline_world(monkeypatch, tmp_path):
         "geocode",
         lambda name: {
             "A": (48.85, 2.35, "City A"),
-            "B": (49.25, 2.65, "City B"),
+            "B": (48.75, 2.55, "City B"),
         }[name],
     )
     monkeypatch.setattr(cli, "download_tiles", lambda *args: None)
@@ -65,6 +65,46 @@ def test_no_path_exits_1(offline_world, monkeypatch, capsys):
     assert "No path found." in capsys.readouterr().err
 
 
+def test_buffer_km_zero_disables_auto_margin(offline_world, monkeypatch):
+    seen = {}
+    real_build_dem = cli.build_dem
+
+    def spy(bbox, *args, **kwargs):
+        seen["bbox"] = bbox
+        return real_build_dem(bbox, *args, **kwargs)
+
+    monkeypatch.setattr(cli, "build_dem", spy)
+
+    rc = cli.main(
+        ["A", "B", "--grid-size", "12", "--buffer-km", "0", "--output", str(offline_world / "b.png")]
+    )
+    assert rc == 0
+    # Cities differ by 0.2 deg in longitude; with no margin the bbox must be
+    # exactly that span, not the auto 0.3 deg margin (0.8 deg total).
+    west, _, east, _ = seen["bbox"]
+    assert east - west == pytest.approx(0.2)
+
+
+def test_grid_size_below_two_is_rejected():
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["A", "B", "--grid-size", "1"])
+    assert exc.value.code == 2
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["A", "B", "--grid-size", "-3"])
+    assert exc.value.code == 2
+
+
+def test_negative_values_are_rejected():
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["A", "B", "--buffer-km", "-1"])
+    assert exc.value.code == 2
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["A", "B", "--elev-weight", "-5"])
+    assert exc.value.code == 2
+
+
 def test_help_exits_zero():
     with pytest.raises(SystemExit) as exc:
         cli.main(["--help"])
@@ -77,4 +117,6 @@ def test_version_flag(capsys):
     with pytest.raises(SystemExit) as exc:
         cli.main(["--version"])
     assert exc.value.code == 0
-    assert __version__ in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "elevation-route" in out
+    assert __version__ in out

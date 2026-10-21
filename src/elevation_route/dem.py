@@ -5,6 +5,7 @@ Build a regular DEM grid from cached Terrarium tiles.
 from __future__ import annotations
 
 import math
+import sys
 
 import numpy as np
 
@@ -51,11 +52,13 @@ def build_dem(
     py = (wy * n - tile_y) * 256.0
 
     elev = np.full(lon2.shape, np.nan, dtype=np.float32)
+    missing_tiles: list[tuple[int, int]] = []
 
     for x in range(xmin, xmax + 1):
         for y in range(ymin, ymax + 1):
             tile = loader(zoom, x, y)
             if tile is None:
+                missing_tiles.append((x, y))
                 continue
 
             mask = (tile_x == x) & (tile_y == y)
@@ -69,7 +72,16 @@ def build_dem(
 
     if np.isnan(elev).any():
         missing = int(np.isnan(elev).sum())
-        print(f"Warning: {missing} DEM sample(s) missing; filling with 0")
+        if missing_tiles:
+            shown = ", ".join(f"{zoom}/{x}/{y}" for x, y in missing_tiles[:5])
+            more = "" if len(missing_tiles) <= 5 else f" (+{len(missing_tiles) - 5} more)"
+            print(
+                f"Warning: {missing} DEM sample(s) missing; filling with 0. "
+                f"Failed tile(s): {shown}{more}",
+                file=sys.stderr,
+            )
+        else:
+            print(f"Warning: {missing} DEM sample(s) missing; filling with 0", file=sys.stderr)
         elev = np.nan_to_num(elev, nan=0.0)
 
     return elev, lons, lats

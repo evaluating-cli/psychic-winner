@@ -50,7 +50,10 @@ def test_build_dem_missing_tiles_filled_with_zero(capsys):
     assert elev.shape == (20, 20)
     assert 0.0 in elev  # filled
     assert 100.0 in elev  # real samples
-    assert "missing" in capsys.readouterr().out
+    err = capsys.readouterr().err
+    assert "missing" in err
+    # The warning names the failed tiles so DEM holes are traceable.
+    assert f"{zoom}/{xmin + 1}/" in err
 
 
 def test_build_dem_missing_without_loader_hook(monkeypatch):

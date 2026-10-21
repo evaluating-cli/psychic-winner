@@ -1,5 +1,7 @@
 # elevation-route
 
+[![tests](https://github.com/evaluating-cli/psychic-winner/actions/workflows/tests.yml/badge.svg)](https://github.com/evaluating-cli/psychic-winner/actions/workflows/tests.yml)
+
 **Terrain route minimiser for two European cities.** Geocodes two place names,
 downloads public Web-Mercator terrain tiles, builds a DEM grid, finds a
 least-cost path that strongly penalises elevation change, reports route
@@ -78,9 +80,9 @@ elevation-route [-h] [--grid-size N] [--elev-weight W] [--buffer-km KM]
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `city1`, `city2` | — | Place names, or `lat,lon` coordinates |
-| `--grid-size` | `700` | DEM grid resolution (`grid_size × grid_size` samples) |
-| `--elev-weight` | `100` | Cost of 1 m of elevation change, in metres of distance |
-| `--buffer-km` | auto | Extra margin around the bounding box |
+| `--grid-size` | `700` | DEM grid resolution (`grid_size × grid_size` samples, min 2) |
+| `--elev-weight` | `100` | Cost of 1 m of elevation change, in metres of distance (≥ 0) |
+| `--buffer-km` | auto | Extra margin around the bounding box (`0` = no margin) |
 | `--zoom` | auto | Force a terrain-tile zoom level (6–11) |
 | `--output` | `route_topomap.png` | Output PNG path |
 | `--show` | off | Open an interactive plot window |
@@ -162,8 +164,9 @@ pip install -e ".[dev]"
 pytest
 ```
 
-The test suite is fully offline — network calls are stubbed and DEMs are
-synthesised.
+The test suite is fully offline — network calls are stubbed, DEMs are
+synthesised, and the tile cache is isolated to a temporary directory. CI runs
+the suite on Python 3.9–3.12 via GitHub Actions.
 
 Project layout:
 

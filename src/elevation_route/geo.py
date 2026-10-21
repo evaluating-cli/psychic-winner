@@ -18,6 +18,9 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     dl = math.radians(lon2 - lon1)
 
     a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    # Near-antipodal points can push `a` 1 ulp above 1.0, which would make
+    # math.asin raise ValueError. Clamp first.
+    a = min(1.0, a)
     return 2 * r * math.asin(math.sqrt(a))
 
 

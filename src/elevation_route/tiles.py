@@ -25,6 +25,20 @@ TILE_URLS = [
 
 CACHE_DIR = Path.home() / ".elevation_route_cache"
 
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+def _looks_like_png(data: bytes) -> bool:
+    return data[:8] == PNG_MAGIC
+
+
+def _cached_tile_ok(path: Path) -> bool:
+    """A cache entry is trusted only if it is large enough *and* a PNG."""
+    if not path.exists() or path.stat().st_size <= 100:
+        return False
+    with open(path, "rb") as f:
+        return _looks_like_png(f.read(8))
+
 
 def tile_cache_path(zoom: int, x: int, y: int) -> Path:
     return CACHE_DIR / str(zoom) / str(x) / f"{y}.png"
@@ -34,14 +48,14 @@ def download_tile(zoom: int, x: int, y: int) -> bool:
     """Download one elevation tile into the local cache."""
     path = tile_cache_path(zoom, x, y)
 
-    if path.exists() and path.stat().st_size > 100:
+    if _cached_tile_ok(path):
         return True
 
     for url_template in TILE_URLS:
         url = url_template.format(z=zoom, x=x, y=y)
         try:
             r = SESSION.get(url, timeout=30)
-            if r.status_code == 200 and len(r.content) > 100:
+            if r.status_code == 200 and len(r.content) > 100 and _looks_like_png(r.content):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(r.content)
                 return True
