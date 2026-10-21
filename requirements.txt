@@ -1,0 +1,9 @@
+# Runtime dependencies (same as pyproject.toml).
+# Prefer:  pip install -e ".[dev]"
+numpy>=1.22
+requests>=2.27
+pillow>=9.0
+matplotlib>=3.5
+
+# Development / tests
+pytest>=7.0
